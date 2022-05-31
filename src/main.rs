@@ -1,12 +1,16 @@
 #![allow(non_camel_case_types)]
 use binary_layout::prelude::*;
+use iced_x86::code_asm::IcedError;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::os::unix::fs::OpenOptionsExt;
-use iced_x86::code_asm::IcedError;
 
 // ELF-64 standard from https://uclibc.org/docs/elf-64-gen.pdf and
 // https://uclibc.org/docs/psABI-x86_64.pdf (for the value EM_X86_64, specific to x86-64).
+//
+// also learned from
+// https://www.muppetlabs.com/~breadbox/software/tiny/teensy.html and
+// https://github.com/AjayBrahmakshatriya/minimal-elf/
 
 type Elf64_Addr = u64;
 type Elf64_Off = u64;
