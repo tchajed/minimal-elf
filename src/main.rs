@@ -34,7 +34,9 @@ mod tests {
 }
 
 fn set_ident<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_ident::View<S>) {
-    view.mag_mut().write(&[0x7f, 'E' as u8, 'L' as u8, 'F' as u8]).unwrap();
+    view.mag_mut()
+        .write(&[0x7f, 'E' as u8, 'L' as u8, 'F' as u8])
+        .unwrap();
     view.class_mut().write(2); // class: ELFCLASS64
     view.data_mut().write(1); // data encoding: ELFDATA2LSB
     view.version_mut().write(1); // file version: EV_CURRENT
@@ -60,8 +62,7 @@ define_layout!(elf64_hdr, LittleEndian, {
     shstrndx: Elf64_Half, // section name string table index
 });
 
-fn set_elf64_hdr(storage: &mut [u8]) {
-    let mut view = elf64_hdr::View::new(storage);
+fn set_elf64_hdr<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_hdr::View<S>) {
     set_ident(view.ident_mut());
     view._type_mut().write(2); // ET_EXEC
     view.machine_mut().write(62); // EM_X86_64
@@ -85,6 +86,12 @@ define_layout!(elf64_phdr, LittleEndian, {
     align: Elf64_Xword,
 });
 
+define_layout!(elf64_file, LittleEndian, {
+    hdr: elf64_hdr::NestedView,
+    phdr: elf64_phdr::NestedView,
+    program: [u8],
+});
+
 fn create_program() -> Vec<u8> {
     return vec![
         0x66, 0xb8, 0x3c, 0x00, // mov $60, %ax
@@ -97,8 +104,10 @@ fn program_offset() -> u64 {
 }
 const VADDR: u64 = 0x400000;
 
-fn set_elf64_phdr(storage: &mut [u8], program_size: u64) {
-    let mut view = elf64_phdr::View::new(storage);
+fn set_elf64_phdr<S>(mut view: elf64_phdr::View<S>, program_size: u64)
+where
+    S: AsRef<[u8]> + AsMut<[u8]>,
+{
     view._type_mut().write(1); // PT_LOAD
     view.flags_mut().write(0x1 | 0x2 | 0x4); // PF_X | PF_W | PF_R
 
@@ -117,9 +126,10 @@ fn main() -> std::io::Result<()> {
     let hdr_sz = elf64_hdr::SIZE.unwrap();
     let phdr_sz = elf64_phdr::SIZE.unwrap();
     let mut buf = vec![0u8; hdr_sz + phdr_sz + program.len()];
-    set_elf64_hdr(&mut buf[..hdr_sz]);
-    set_elf64_phdr(&mut buf[hdr_sz..hdr_sz + phdr_sz], program.len() as u64);
-    buf[program_offset() as usize..].copy_from_slice(&program);
+    let mut file = elf64_file::View::new(&mut buf);
+    set_elf64_hdr(file.hdr_mut());
+    set_elf64_phdr(file.phdr_mut(), program.len() as u64);
+    file.program_mut().copy_from_slice(&program);
 
     let mut options = OpenOptions::new();
     options.write(true).create(true).mode(0o755);
