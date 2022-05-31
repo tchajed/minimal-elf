@@ -36,7 +36,8 @@ mod ident_tests {
 
     #[test]
     fn ident_size_ok() {
-        // XXX: could be a static assertion but Option<>.unwrap() is not a const_fn
+        // XXX: could be a static assertion but Option<>::unwrap() is not a
+        // const_fn
         assert_eq!(16, elf64_ident::SIZE.unwrap());
     }
 }
@@ -69,6 +70,12 @@ define_layout!(elf64_hdr, LittleEndian, {
     shnum: Elf64_Half, // number of section header entries
     shstrndx: Elf64_Half, // section name string table index
 });
+
+// XXX: can't use Option<>::unwrap() in const_fn
+fn program_offset() -> u64 {
+    (elf64_hdr::SIZE.unwrap() + elf64_phdr::SIZE.unwrap()) as u64
+}
+const VADDR: u64 = 0x400000;
 
 fn set_elf64_hdr<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_hdr::View<S>) {
     set_ident(view.ident_mut());
@@ -128,11 +135,6 @@ mod program_tests {
         assert_eq!(5, program.len());
     }
 }
-
-fn program_offset() -> u64 {
-    (elf64_hdr::SIZE.unwrap() + elf64_phdr::SIZE.unwrap()) as u64
-}
-const VADDR: u64 = 0x400000;
 
 fn set_elf64_phdr<S>(mut view: elf64_phdr::View<S>, program_size: u64)
 where
