@@ -107,22 +107,22 @@ define_layout!(elf64_file, LittleEndian, {
     program: [u8],
 });
 
-fn try_create_program() -> Result<Vec<u8>, IcedError> {
-    use iced_x86::code_asm::*;
-    let mut a = CodeAssembler::new(64)?;
-    // push + pop is 2+1 bytes, which is slightly shorter than even mov(eax, 60)
-    a.push(60)?;
-    a.pop(rax)?;
-    // a.mov(eax, 60)?;
-    // zero edi in two bytes
-    a.xor(edi, edi)?;
-    a.syscall()?;
-    let bytes = a.assemble(VADDR)?;
-    Ok(bytes)
-}
-
 fn create_program() -> Vec<u8> {
-    try_create_program().unwrap()
+    // XXX: couldn't figure out how to do this with a try block
+    let f = || -> Result<_, IcedError> {
+        use iced_x86::code_asm::*;
+        let mut a = CodeAssembler::new(64)?;
+        // push + pop is 2+1 bytes, which is slightly shorter than even mov(eax, 60)
+        a.push(60)?;
+        a.pop(rax)?;
+        // a.mov(eax, 60)?;
+        // zero edi in two bytes
+        a.xor(edi, edi)?;
+        a.syscall()?;
+        let bytes = a.assemble(VADDR)?;
+        Ok(bytes)
+    };
+    f().unwrap()
 }
 
 #[cfg(test)]
