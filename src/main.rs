@@ -3,6 +3,10 @@ use binary_layout::prelude::*;
 use std::fs::OpenOptions;
 use std::io::prelude::*;
 use std::os::unix::fs::OpenOptionsExt;
+use iced_x86::code_asm::IcedError;
+
+// ELF-64 standard from https://uclibc.org/docs/elf-64-gen.pdf and
+// https://uclibc.org/docs/psABI-x86_64.pdf (for the value EM_X86_64, specific to x86-64).
 
 type Elf64_Addr = u64;
 type Elf64_Off = u64;
@@ -23,7 +27,7 @@ define_layout!(elf64_ident, LittleEndian, {
 });
 
 #[cfg(test)]
-mod tests {
+mod ident_tests {
     use super::elf64_ident;
 
     #[test]
@@ -92,11 +96,33 @@ define_layout!(elf64_file, LittleEndian, {
     program: [u8],
 });
 
+fn try_create_program() -> Result<Vec<u8>, IcedError> {
+    use iced_x86::code_asm::*;
+    let mut a = CodeAssembler::new(64)?;
+    // push + pop is 2+1 bytes, which is slightly shorter than even mov(eax, 60)
+    a.push(60)?;
+    a.pop(rax)?;
+    // a.mov(eax, 60)?;
+    // zero eax in two bytes (unnecessary because Linux zeroes all registers)
+    // a.xor(eax, eax)?;
+    a.syscall()?;
+    let bytes = a.assemble(VADDR)?;
+    Ok(bytes)
+}
+
 fn create_program() -> Vec<u8> {
-    return vec![
-        0x66, 0xb8, 0x3c, 0x00, // mov $60, %ax
-        0x0f, 0x05, // syscall
-    ];
+    try_create_program().unwrap()
+}
+
+#[cfg(test)]
+mod program_tests {
+    use super::create_program;
+
+    #[test]
+    fn test_create_program() {
+        let program = create_program();
+        assert_eq!(5, program.len());
+    }
 }
 
 fn program_offset() -> u64 {
