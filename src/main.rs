@@ -12,8 +12,39 @@ type Elf64_Word = u32;
 type Elf64_Xword = u64;
 // type Elf64_Sxword = i64;
 
+define_layout!(elf64_ident, LittleEndian, {
+    mag: [u8; 4],
+    class: u8,
+    data: u8,
+    version: u8,
+    os_abi: u8,
+    abi_version: u8,
+    pad: [u8; 7],
+});
+
+#[cfg(test)]
+mod tests {
+    use super::elf64_ident;
+
+    #[test]
+    fn ident_size_ok() {
+        // XXX: could be a static assertion but Option<>.unwrap() is not a const_fn
+        assert_eq!(16, elf64_ident::SIZE.unwrap());
+    }
+}
+
+fn set_ident<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_ident::View<S>) {
+    view.mag_mut().write(&[0x7f, 'E' as u8, 'L' as u8, 'F' as u8]).unwrap();
+    view.class_mut().write(2); // class: ELFCLASS64
+    view.data_mut().write(1); // data encoding: ELFDATA2LSB
+    view.version_mut().write(1); // file version: EV_CURRENT
+    view.os_abi_mut().write(0); // OS/ABI identification: System V
+    view.abi_version_mut().write(0); // ABI version: System V third edition
+    view.pad_mut().copy_from_slice(&[0u8; 7]);
+}
+
 define_layout!(elf64_hdr, LittleEndian, {
-    ident: [u8; 16],
+    ident: elf64_ident::NestedView,
     _type: Elf64_Half,
     machine: Elf64_Half,
     version: Elf64_Word,
@@ -31,7 +62,7 @@ define_layout!(elf64_hdr, LittleEndian, {
 
 fn set_elf64_hdr(storage: &mut [u8]) {
     let mut view = elf64_hdr::View::new(storage);
-    view.ident_mut().copy_from_slice(&create_ident());
+    set_ident(view.ident_mut());
     view._type_mut().write(2); // ET_EXEC
     view.machine_mut().write(62); // EM_X86_64
     view.version_mut().write(1); // EV_CURRENT
@@ -53,29 +84,6 @@ define_layout!(elf64_phdr, LittleEndian, {
     memsz: Elf64_Xword,
     align: Elf64_Xword,
 });
-
-fn create_ident() -> [u8; 16] {
-    let mut ident = [0; 16];
-    ident[0] = 0x7f; // magic
-    ident[1] = 'E' as u8;
-    ident[2] = 'L' as u8;
-    ident[3] = 'F' as u8;
-    ident[4] = 2; // class: ELFCLASS64
-    ident[5] = 1; // data encoding: ELFDATA2LSB
-    ident[6] = 1; // file version: EV_CURRENT
-    ident[7] = 0; // OS/ABI identification: System V
-    ident[8] = 0; // ABI version: System V third edition
-
-    // padding
-    ident[9] = 0;
-    ident[10] = 0;
-    ident[11] = 0;
-    ident[12] = 0;
-    ident[13] = 0;
-    ident[14] = 0;
-    ident[15] = 0;
-    return ident;
-}
 
 fn create_program() -> Vec<u8> {
     return vec![
