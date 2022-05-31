@@ -2,11 +2,13 @@
 
 [![Cargo Build & Test](https://github.com/tchajed/minimal-elf/actions/workflows/build.yml/badge.svg)](https://github.com/tchajed/minimal-elf/actions/workflows/build.yml)
 
-I wanted to create a minimal binary, that doesn't issue any syscalls. That
+I wanted to create an executable that doesn't issue any syscalls (or at least as
+few as possible). That
 turned into creating a minimal binary, which led to this [blog
 post](https://www.muppetlabs.com/~breadbox/software/tiny/teensy.html).
 Unfortunately the post creates a 32-bit ELF file, and it would be nicer to use
-64-bit. I also wanted to write it in Rust, to learn some Rust.
+64-bit. I also wanted to write it in Rust (to learn some Rust, not because this
+is a good idea).
 
 There are three stages of minimization here: `tiny.c`, `tiny.s`, and then a Rust
 program that generates a binary directly.
@@ -24,7 +26,7 @@ There's not much to do in C, but the binary it generates is a whopping 20KB:
 ```
 
 While C is certainly a low-level language, it does have a runtime surrounding
-this code. Running `objdump -d tiny_c` reveals a whole of functionality
+this code. Running `objdump -d tiny_c` reveals a whole bunch of functionality
 surrounding our pithy function (which is just `xor %eax, %eax; ret`). In
 particular libc provides a function `_start`, which is the actual entry point of
 the file. The libc `_start` does a bunch of stuff I don't understand, including
@@ -55,6 +57,7 @@ Oops, the linker says there's already a `_start` and no `main`. We need to disab
 stuff provided by C; first we don't need a `_start`, we'll take care of it:
 
 ```sh
+$ clang -nostdlib tiny_bad.s -o tiny_bad
 $ ./tiny_bad
 fish: Job 1, './tiny_bad' terminated by signal SIGSEGV (Address boundary error)
 ```
@@ -67,7 +70,8 @@ Instead, we should just call `exit(2)` directly. This [blog post on assembly for
 Linux](https://www.cs.fsu.edu/~langley/CNT5605/2017-Summer/assembly-example/assembly.html)
 was helpful, though it's nice to note that it's just walking through the Linux
 source code. This is also where we depart from the blog post above, because
-making a 64-bit syscall is a bit different.
+making a 64-bit syscall is a bit different: we put the syscall number (60) in
+%rax and the argument to the syscall (the return value, in this case) in %edi:
 
 ```asm
 // tiny.s
@@ -108,7 +112,8 @@ exit(0)                                 = ?
 
 This is actually coming from dynamic linking. We don't have any symbols to
 dynamically link (in fact we only have one symbol, `_start`, which doesn't even
-attempt to follow the C calling convention). Let's instead link the program statically:
+attempt to follow the C calling convention). Let's instead link the program
+statically:
 
 ```
 $ clang -nostdlib -static tiny.s -o tiny
@@ -120,9 +125,10 @@ exit(0)                                 = ?
 +++ exited with 0 +++
 ```
 
-Great, we're down to 4.6KB. The file [tiny.s](tiny.s) just makes one change:
+Great, we're down to 4.6KB. The file [tiny.s](tiny.s) makes one change:
 instead of doing `mov %60, %rax` like a normal person, we use `push` and `pop`
-since these take only 3 bytes instead of 4.
+since these take only 3 bytes instead of 4. The Makefile also calls `strip` to
+get rid of some unnecessary sections in the binary with symbols.
 
 ## Manually writing a binary
 
@@ -157,8 +163,13 @@ There are all these symbols and sections that aren't needed. Even after `strip`
 the file is still over 4KB.
 
 To really optimize the binary, we can instead produce an ELF file completely
-manually. This is where [this Rust program](src/main.rs), which constructs an
-ELF binary by defining the appropriate binary structs and then writing them out.
+manually. This is where [this Rust program](src/main.rs) comes in. It constructs an
+ELF binary by defining the appropriate binary structs and then writing them out,
+using
+[binary_layout](https://docs.rs/binary-layout/latest/binary_layout/index.html).
+It even constructs the assembly using
+[iced-x86](https://docs.rs/iced-x86/latest/iced_x86/index.html), a remarkable
+library for parsing and assembling x86 using Rust builders (not even macros!).
 
 The result is a remarkably small file:
 
