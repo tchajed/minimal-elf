@@ -34,8 +34,6 @@ setting up stack guards and some global initialization.
 
 We can try to create a more minimal binary with the following:
 
-tiny_bad.asm:
-
 ```asm
 // tiny_bad.s
 .global _start
@@ -45,7 +43,7 @@ _start:
   ret
 ```
 
-```sh
+```txt
 $ clang tiny_bad.s -o tiny_bad
 /usr/bin/ld: /tmp/tiny_bad-a4cf26.o: in function `_start':
 (.text+0x0): multiple definition of `_start'; /usr/bin/../lib64/gcc/x86_64-pc-linux-gnu/12.1.0/../../../../lib64/Scrt1.o:/build/glibc/src/glibc/csu/../sysdeps/x86_64/start.S:57: first defined here
@@ -57,7 +55,7 @@ Oops, the linker says there's already a `_start` and no `main`. We need to disab
 stuff provided by C; first we don't need a `_start`, we'll take care of it:
 
 ```sh
-% ./tiny_bad
+$ ./tiny_bad
 fish: Job 1, './tiny_bad' terminated by signal SIGSEGV (Address boundary error)
 ```
 
@@ -124,7 +122,7 @@ exit(0)                                 = ?
 
 Great, we're down to 4.6KB. The file [tiny.s](tiny.s) just makes one change:
 instead of doing `mov %60, %rax` like a normal person, we use `push` and `pop`
-since these only take 3 bytes instead of 4.
+since these take only 3 bytes instead of 4.
 
 ## Manually writing a binary
 
@@ -171,5 +169,16 @@ $ ll tiny
 .rwxr-xr-x 127 tchajed 31 May 17:04 tiny
 ```
 
-Just 127 bytes! And we wrote all of them manually (except for the 7-byte
-program `push`, remember that?).
+Just 127 bytes! And we wrote all of them manually. Except for the 7-byte
+program `push` (remember that?), which looks like this (from `objdump -d`):
+
+```
+  401000:	6a 3c                	push   $0x3c
+  401002:	58                   	pop    %rax
+  401003:	31 ff                	xor    %edi,%edi
+  401005:	0f 05                	syscall
+```
+
+Here's a hand-made diagram of the file:
+
+![ELF file diagram](elf.png)
