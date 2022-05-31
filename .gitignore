@@ -1,4 +1,6 @@
 /target
-/program.o
 # output by binary
 /tiny
+# compiled
+/tiny_c
+/tiny_asm
