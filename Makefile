@@ -5,6 +5,7 @@ tiny_c: tiny.c
 
 tiny_asm: tiny.s
 	clang -nostartfiles -nostdlib -static $< -o $@
+	strip $@
 
 tiny: src/main.rs
 	cargo run

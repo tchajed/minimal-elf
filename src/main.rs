@@ -114,8 +114,8 @@ fn try_create_program() -> Result<Vec<u8>, IcedError> {
     a.push(60)?;
     a.pop(rax)?;
     // a.mov(eax, 60)?;
-    // zero eax in two bytes (unnecessary because Linux zeroes all registers)
-    // a.xor(eax, eax)?;
+    // zero edi in two bytes
+    a.xor(edi, edi)?;
     a.syscall()?;
     let bytes = a.assemble(VADDR)?;
     Ok(bytes)
@@ -132,7 +132,7 @@ mod program_tests {
     #[test]
     fn test_create_program() {
         let program = create_program();
-        assert_eq!(5, program.len());
+        assert_eq!(7, program.len());
     }
 }
 
