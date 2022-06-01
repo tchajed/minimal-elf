@@ -38,7 +38,7 @@ We can try to create a more minimal binary with the following:
 
 ```asm
 // tiny_bad.s
-.global _start
+.globl _start
 .text
 _start:
   xor %eax, %eax
@@ -77,11 +77,10 @@ making a 64-bit syscall is a bit different: we put the syscall number (60) in
 // tiny.s
 .globl _start
 .text
-
 _start:
-	mov $60, %rax
-	xorl %edi, %edi
-	syscall
+  mov $60, %rax
+  xorl %edi, %edi
+  syscall
 ```
 
 ```
@@ -127,8 +126,10 @@ exit(0)                                 = ?
 
 Great, we're down to 4.6KB. The file [tiny.s](tiny.s) makes one change:
 instead of doing `mov %60, %rax` like a normal person, we use `push` and `pop`
-since these take only 3 bytes instead of 4. The Makefile also calls `strip` to
-get rid of some unnecessary sections in the binary with symbols.
+since these [take only 3 bytes instead of
+4](https://stackoverflow.com/questions/33825546/shortest-intel-x86-64-opcode-for-rax-1).
+The Makefile also calls `strip` to get rid of some unnecessary sections in the
+binary with symbols.
 
 ## Manually writing a binary
 
@@ -138,8 +139,8 @@ The binary produced by using the normal assembler still has a lot of cruft:
 $ objdump -x tiny_asm
 tiny_asm:     file format elf64-x86-64
 tiny_asm
-architecture: i386:x86-64, flags 0x00000112:
-EXEC_P, HAS_SYMS, D_PAGED
+architecture: i386:x86-64, flags 0x00000102:
+EXEC_P, D_PAGED
 start address 0x0000000000401000
 
 Program Header:
@@ -153,14 +154,43 @@ Idx Name          Size      VMA               LMA               File off  Algn
   0 .text         00000007  0000000000401000  0000000000401000  00001000  2**2
                   CONTENTS, ALLOC, LOAD, READONLY, CODE
 SYMBOL TABLE:
-0000000000401000 g       .text	0000000000000000 _start
-0000000000402000 g       .text	0000000000000000 __bss_start
-0000000000402000 g       .text	0000000000000000 _edata
-0000000000402000 g       .text	0000000000000000 _end
+no symbols
 ```
 
-There are all these symbols and sections that aren't needed. Even after `strip`
-the file is still over 4KB.
+This is after `strip` - you can see there's two segments (only the onye at vaddr
+0x401000 has the program, so we don't need the other one), a .text section, and
+a symbol table which turns out to be encoded as an empty section. We can get
+more detailed information as to what is actually in this file using `readelf`:
+
+```
+$ readelf -lSW tiny_asm
+There are 3 section headers, starting at offset 0x1018:
+
+Section Headers:
+  [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
+  [ 1] .text             PROGBITS        0000000000401000 001000 000007 00  AX  0   0  4
+  [ 2] .shstrtab         STRTAB          0000000000000000 001007 000011 00      0   0  1
+Key to Flags:
+  W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
+  L (link order), O (extra OS processing required), G (group), T (TLS),
+  C (compressed), x (unknown), o (OS specific), E (exclude),
+  D (mbind), l (large), p (processor specific)
+
+Elf file type is EXEC (Executable file)
+Entry point 0x401000
+There are 2 program headers, starting at offset 64
+
+Program Headers:
+  Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+  LOAD           0x000000 0x0000000000400000 0x0000000000400000 0x0000b0 0x0000b0 R   0x1000
+  LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x000007 0x000007 R E 0x1000
+
+ Section to Segment mapping:
+  Segment Sections...
+   00
+   01     .text
+```
 
 To really optimize the binary, we can instead produce an ELF file completely
 manually. This is where [this Rust program](src/main.rs) comes in. It constructs an
@@ -170,6 +200,11 @@ using
 It even constructs the assembly using
 [iced-x86](https://docs.rs/iced-x86/latest/iced_x86/index.html), a remarkable
 library for parsing and assembling x86 using Rust builders (not even macros!).
+
+The ELF format has a program header followed by some number of section headers.
+To optimize for space, our ELF file only uses a single program header and no
+section headers (unlike the above file which has three sections; one is of size 0
+and the other is an empty symbol table).
 
 The result is a remarkably small file:
 
