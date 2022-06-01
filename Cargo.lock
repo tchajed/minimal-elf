@@ -40,6 +40,7 @@ version = "0.1.0"
 dependencies = [
  "binary-layout",
  "iced-x86",
+ "lazy_static",
 ]
 
 [[package]]
