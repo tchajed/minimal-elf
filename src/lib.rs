@@ -1,17 +1,23 @@
+//! Create a minimal ELF file manually.
+//!
+//! Based on reading the [ELF-64
+//! standard](https://uclibc.org/docs/elf-64-gen.pdf) and the [x86-64
+//! architecture supplement](https://uclibc.org/docs/psABI-x86_64.pdf) (for the
+//! value `EM_X86_64`, specific to x86-64).
+//!
+//! Also learned from the classic blog post "[A Whirlwind Tutorial on Creating
+//! Really Teensy Elf Executables for
+//! Linux](https://www.muppetlabs.com/~breadbox/software/tiny/teensy.html)" and
+//! the code in <https://github.com/AjayBrahmakshatriya/minimal-elf/>.
+
 #![allow(non_camel_case_types)]
+
 #[macro_use]
 extern crate lazy_static;
 use binary_layout::prelude::*;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{fs::OpenOptions, os::unix::prelude::OpenOptionsExt};
-
-// ELF-64 standard from https://uclibc.org/docs/elf-64-gen.pdf and
-// https://uclibc.org/docs/psABI-x86_64.pdf (for the value EM_X86_64, specific to x86-64).
-//
-// also learned from
-// https://www.muppetlabs.com/~breadbox/software/tiny/teensy.html and
-// https://github.com/AjayBrahmakshatriya/minimal-elf/
 
 type Elf64_Addr = u64;
 type Elf64_Off = u64;
@@ -110,7 +116,8 @@ where
     view.flags_mut().write(0x1 | 0x2 | 0x4); // PF_X | PF_W | PF_R
 
     // location of segment in file
-    view.offset_mut().write(*PROGRAM_OFFSET);
+    let offset = (elf64_hdr::SIZE.unwrap() + elf64_phdr::SIZE.unwrap()) as u64;
+    view.offset_mut().write(offset);
     // virtual address of segment
     view.vaddr_mut().write(VADDR + *PROGRAM_OFFSET);
 
@@ -125,7 +132,7 @@ define_layout!(elf64_file, LittleEndian, {
     program: [u8],
 });
 
-fn create_elf(program: &Vec<u8>) -> Vec<u8> {
+fn create_elf(program: &[u8]) -> Vec<u8> {
     let hdr_sz = elf64_hdr::SIZE.unwrap();
     let phdr_sz = elf64_phdr::SIZE.unwrap();
     let mut buf = vec![0u8; hdr_sz + phdr_sz + program.len()];
@@ -136,8 +143,36 @@ fn create_elf(program: &Vec<u8>) -> Vec<u8> {
     buf
 }
 
-pub fn write_elf<P: AsRef<Path>>(program: &Vec<u8>, path: P) -> std::io::Result<()> {
-    let buf = create_elf(&program);
+fn create_program() -> Vec<u8> {
+    use iced_x86::code_asm::*;
+    let f = || -> Result<_, IcedError> {
+        let mut a = CodeAssembler::new(64)?;
+        // push + pop is 2+1 bytes, which is slightly shorter than even mov(eax, 60)
+        a.push(60)?;
+        a.pop(rax)?;
+        // a.mov(eax, 60)?;
+        // zero edi in two bytes
+        a.xor(edi, edi)?;
+        a.syscall()?;
+        let bytes = a.assemble(VADDR)?;
+        Ok(bytes)
+    };
+    f().unwrap()
+}
+
+#[cfg(test)]
+mod test_program {
+    use super::create_program;
+
+    #[test]
+    fn test_create_program() {
+        let program = create_program();
+        assert_eq!(7, program.len());
+    }
+}
+
+pub fn write_elf<P: AsRef<Path>>(path: P) -> std::io::Result<()> {
+    let buf = create_elf(&create_program());
     let mut options = OpenOptions::new();
     options.write(true).create(true).mode(0o755);
     let mut file = options.open(path)?;

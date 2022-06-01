@@ -193,11 +193,11 @@ Program Headers:
 ```
 
 To really optimize the binary, we can instead produce an ELF file completely
-manually. This is where [this Rust program](src/main.rs) comes in. It constructs an
+manually. This is where [this Rust program](src/lib.rs) comes in. It constructs an
 ELF binary by defining the appropriate binary structs and then writing them out,
 using
 [binary_layout](https://docs.rs/binary-layout/latest/binary_layout/index.html).
-It even constructs the assembly using
+It even constructs the assembly code using
 [iced-x86](https://docs.rs/iced-x86/latest/iced_x86/index.html), a remarkable
 library for parsing and assembling x86 using Rust builders (not even macros!).
 
