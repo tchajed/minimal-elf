@@ -12,8 +12,6 @@
 
 #![allow(non_camel_case_types)]
 
-#[macro_use]
-extern crate lazy_static;
 use binary_layout::prelude::*;
 use std::io::prelude::*;
 use std::path::Path;
@@ -78,10 +76,19 @@ define_layout!(elf64_hdr, LittleEndian, {
     shstrndx: Elf64_Half, // section name string table index
 });
 
-lazy_static! {
-    // XXX: can't use Option<>::unwrap() in const_fn
-    static ref PROGRAM_OFFSET: u64 = (elf64_hdr::SIZE.unwrap() + elf64_phdr::SIZE.unwrap()) as u64;
-}
+const PROGRAM_OFFSET: u64 = {
+    // XXX: manually implement unwrap since it isn't stable as a const fn
+    let sz1 = match elf64_hdr::SIZE {
+        Some(s) => s,
+        None => panic!("unsized"),
+    };
+    let sz2 = match elf64_phdr::SIZE {
+        Some(s) => s,
+        None => panic!("unsized"),
+    };
+    (sz1 + sz2) as u64
+};
+
 pub const VADDR: u64 = 0x400000;
 
 fn set_elf64_hdr<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_hdr::View<S>) {
@@ -89,7 +96,7 @@ fn set_elf64_hdr<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_hdr::View<S>) {
     view._type_mut().write(2); // ET_EXEC
     view.machine_mut().write(62); // EM_X86_64
     view.version_mut().write(1); // EV_CURRENT
-    view.entry_mut().write(VADDR + *PROGRAM_OFFSET);
+    view.entry_mut().write(VADDR + PROGRAM_OFFSET);
     view.phoff_mut().write(elf64_hdr::SIZE.unwrap() as u64);
     view.flags_mut().write(0); // no processor-specific flags
     view.ehsize_mut().write(elf64_hdr::SIZE.unwrap() as u16);
@@ -119,7 +126,7 @@ where
     let offset = (elf64_hdr::SIZE.unwrap() + elf64_phdr::SIZE.unwrap()) as u64;
     view.offset_mut().write(offset);
     // virtual address of segment
-    view.vaddr_mut().write(VADDR + *PROGRAM_OFFSET);
+    view.vaddr_mut().write(VADDR + PROGRAM_OFFSET);
 
     view.filesz_mut().write(program_size);
     view.memsz_mut().write(program_size);
