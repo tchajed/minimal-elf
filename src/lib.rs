@@ -49,8 +49,7 @@ mod tests {
 
 fn set_ident<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_ident::View<S>) {
     view.mag_mut()
-        .write(&[0x7f, 'E' as u8, 'L' as u8, 'F' as u8])
-        .unwrap();
+        .copy_from_slice(&[0x7f, 'E' as u8, 'L' as u8, 'F' as u8]);
     view.class_mut().write(2); // class: ELFCLASS64
     view.data_mut().write(1); // data encoding: ELFDATA2LSB
     view.version_mut().write(1); // file version: EV_CURRENT
