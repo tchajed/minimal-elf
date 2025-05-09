@@ -25,7 +25,7 @@ type Elf64_Word = u32;
 type Elf64_Xword = u64;
 // type Elf64_Sxword = i64;
 
-define_layout!(elf64_ident, LittleEndian, {
+binary_layout!(elf64_ident, LittleEndian, {
     mag: [u8; 4],
     class: u8,
     data: u8,
@@ -58,7 +58,7 @@ fn set_ident<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_ident::View<S>) {
     view.pad_mut().copy_from_slice(&[0u8; 7]);
 }
 
-define_layout!(elf64_hdr, LittleEndian, {
+binary_layout!(elf64_hdr, LittleEndian, {
     ident: elf64_ident::NestedView,
     _type: Elf64_Half,
     machine: Elf64_Half,
@@ -103,7 +103,7 @@ fn set_elf64_hdr<S: AsRef<[u8]> + AsMut<[u8]>>(mut view: elf64_hdr::View<S>) {
     view.phnum_mut().write(1);
 }
 
-define_layout!(elf64_phdr, LittleEndian, {
+binary_layout!(elf64_phdr, LittleEndian, {
     _type: Elf64_Word,
     flags: Elf64_Word,
     offset: Elf64_Off,
@@ -132,7 +132,7 @@ where
     view.align_mut().write(4096);
 }
 
-define_layout!(elf64_file, LittleEndian, {
+binary_layout!(elf64_file, LittleEndian, {
     hdr: elf64_hdr::NestedView,
     phdr: elf64_phdr::NestedView,
     program: [u8],

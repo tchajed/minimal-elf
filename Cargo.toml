@@ -6,5 +6,5 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-binary-layout = "3.0.0"
-iced-x86 = { version = "1.17.0", features = ["code_asm"] }
+binary-layout = "4.0.2"
+iced-x86 = { version = "1.21.0", features = ["code_asm"] }
