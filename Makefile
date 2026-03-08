@@ -1,4 +1,6 @@
-all: tiny_c tiny_asm tiny_asm_opt tiny
+ALL_TARGETS = tiny_c tiny_asm tiny_asm_opt tiny
+
+all: $(ALL_TARGETS)
 
 tiny_c: tiny.c
 	clang -O2 -static $< -o $@
@@ -13,3 +15,6 @@ tiny_asm_opt: tiny.s
 
 tiny: src/main.rs
 	cargo run
+
+clean:
+	rm -f $(ALL_TARGETS)
