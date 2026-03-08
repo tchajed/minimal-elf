@@ -19,10 +19,10 @@ program that generates a binary directly.
 int main() { return 0; }
 ```
 
-There's not much to do in C, but the binary it generates is a whopping 20KB:
+There's not much to do in C, but the binary it generates is a whopping 737KB:
 
 ```sh
-.rwxr-xr-x 20,344 tchajed 31 May 16:25 tiny_c
+-rwxr-xr-x 1 root root 737K Mar  8 19:36 tiny_c
 ```
 
 While C is certainly a low-level language, it does have a runtime surrounding
@@ -84,13 +84,13 @@ _start:
 ```
 
 ```
-$ clang -nostdlib tiny.s -o tiny
-$ ll tiny
-.rwxr-xr-x 13,320 tchajed 31 May 16:59 tiny
+$ clang -nostdlib tiny.s -o tiny_asm0
+$ ls -lh tiny_asm0
+-rwxr-xr-x 1 root root 14K Mar  8 19:41 tiny_asm0
 $ ./tiny
 ```
 
-Ok, so this works but the file is still 13KB. In fact, the binary is still doing
+Ok, so this works but the file is still 14KB. In fact, the binary is still doing
 a bunch of other stuff:
 
 ```
@@ -115,28 +115,29 @@ attempt to follow the C calling convention). Let's instead link the program
 statically:
 
 ```
-$ clang -nostdlib -static tiny.s -o tiny
-$ ./tiny
-.rwxr-xr-x 4,608 tchajed 31 May 16:58 tiny
+$ clang -nostdlib -static tiny.s -o tiny_asm
+$ ls -lh tiny_asm
+-rwxr-xr-x 1 root root 4.3K Mar  8 19:40 tiny_asm
 $ strace ./tiny
 execve("./tiny", ["./tiny"], 0x7ffe41ada7d0 /* 26 vars */) = 0
 exit(0)                                 = ?
 +++ exited with 0 +++
 ```
 
-Great, we're down to 4.6KB. The file [tiny.s](tiny.s) makes one change:
+Great, we're down to 4.3KB. The file [tiny.s](tiny.s) makes one change:
 instead of doing `mov %60, %rax` like a normal person, we use `push` and `pop`
 since these [take only 3 bytes instead of
 4](https://stackoverflow.com/questions/33825546/shortest-intel-x86-64-opcode-for-rax-1).
 The Makefile also calls `strip` to get rid of some unnecessary sections in the
 binary with symbols.
 
-## Manually writing a binary
+## What's in the ELF file?
 
 The binary produced by using the normal assembler still has a lot of cruft:
 
 ```
 $ objdump -x tiny_asm
+
 tiny_asm:     file format elf64-x86-64
 tiny_asm
 architecture: i386:x86-64, flags 0x00000102:
@@ -145,32 +146,37 @@ start address 0x0000000000401000
 
 Program Header:
     LOAD off    0x0000000000000000 vaddr 0x0000000000400000 paddr 0x0000000000400000 align 2**12
-         filesz 0x00000000000000b0 memsz 0x00000000000000b0 flags r--
+         filesz 0x000000000000010c memsz 0x000000000000010c flags r--
     LOAD off    0x0000000000001000 vaddr 0x0000000000401000 paddr 0x0000000000401000 align 2**12
          filesz 0x0000000000000007 memsz 0x0000000000000007 flags r-x
+    NOTE off    0x00000000000000e8 vaddr 0x00000000004000e8 paddr 0x00000000004000e8 align 2**2
+         filesz 0x0000000000000024 memsz 0x0000000000000024 flags r--
 
 Sections:
 Idx Name          Size      VMA               LMA               File off  Algn
-  0 .text         00000007  0000000000401000  0000000000401000  00001000  2**2
+  0 .note.gnu.build-id 00000024  00000000004000e8  00000000004000e8  000000e8  2**2
+                  CONTENTS, ALLOC, LOAD, READONLY, DATA
+  1 .text         00000007  0000000000401000  0000000000401000  00001000  2**0
                   CONTENTS, ALLOC, LOAD, READONLY, CODE
 SYMBOL TABLE:
 no symbols
 ```
 
-This is after `strip` - you can see there's two segments (only the onye at vaddr
-0x401000 has the program, so we don't need the other one), a .text section, and
-a symbol table which turns out to be encoded as an empty section. We can get
+This is after `strip` - you can see there's three segments (only the one at vaddr
+0x401000 has the program, so we don't need the other two), a .text section, and
+a .note.gnu.build-id section. We can get
 more detailed information as to what is actually in this file using `readelf`:
 
 ```
 $ readelf -lSW tiny_asm
-There are 3 section headers, starting at offset 0x1018:
+There are 4 section headers, starting at offset 0x1030:
 
 Section Headers:
   [Nr] Name              Type            Address          Off    Size   ES Flg Lk Inf Al
   [ 0]                   NULL            0000000000000000 000000 000000 00      0   0  0
-  [ 1] .text             PROGBITS        0000000000401000 001000 000007 00  AX  0   0  4
-  [ 2] .shstrtab         STRTAB          0000000000000000 001007 000011 00      0   0  1
+  [ 1] .note.gnu.build-id NOTE            00000000004000e8 0000e8 000024 00   A  0   0  4
+  [ 2] .text             PROGBITS        0000000000401000 001000 000007 00  AX  0   0  1
+  [ 3] .shstrtab         STRTAB          0000000000000000 001007 000024 00      0   0  1
 Key to Flags:
   W (write), A (alloc), X (execute), M (merge), S (strings), I (info),
   L (link order), O (extra OS processing required), G (group), T (TLS),
@@ -179,23 +185,30 @@ Key to Flags:
 
 Elf file type is EXEC (Executable file)
 Entry point 0x401000
-There are 2 program headers, starting at offset 64
+There are 3 program headers, starting at offset 64
 
 Program Headers:
   Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
-  LOAD           0x000000 0x0000000000400000 0x0000000000400000 0x0000b0 0x0000b0 R   0x1000
+  LOAD           0x000000 0x0000000000400000 0x0000000000400000 0x00010c 0x00010c R   0x1000
   LOAD           0x001000 0x0000000000401000 0x0000000000401000 0x000007 0x000007 R E 0x1000
+  NOTE           0x0000e8 0x00000000004000e8 0x00000000004000e8 0x000024 0x000024 R   0x4
 
  Section to Segment mapping:
   Segment Sections...
-   00
+   00     .note.gnu.build-id
    01     .text
+   02     .note.gnu.build-id
 ```
 
-To really optimize the binary, we can instead produce an ELF file completely
-manually. This is where [this Rust program](src/lib.rs) comes in. It constructs an
-ELF binary by defining the appropriate binary structs and then writing them out,
-using
+It's possible to remove all these extras and get a tiny binary; see the
+[Makefile](./Makefile) for how to do that.
+
+## Manually writing the binary
+
+The more fun way to make an optimized binary is to write it manually from the
+ground up, rather than stripping down a binary compiled with binutils. This is
+where [this Rust program](src/lib.rs) comes in. It constructs an ELF binary by
+defining the appropriate binary structs and then writing them out, using
 [binary_layout](https://docs.rs/binary-layout/latest/binary_layout/index.html).
 It even constructs the assembly code using
 [iced-x86](https://docs.rs/iced-x86/latest/iced_x86/index.html), a remarkable
@@ -212,7 +225,7 @@ The result is a remarkably small file:
 $ cargo run
 $ ./tiny
 $ ll tiny
-.rwxr-xr-x 127 tchajed 31 May 17:04 tiny
+-rwxr-xr-x 1 root root 127 Mar  8 19:45 tiny
 ```
 
 Just 127 bytes! And we wrote all of them manually. Except for the 7-byte
